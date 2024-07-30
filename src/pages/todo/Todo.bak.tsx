@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import CheckIcon from '@mui/icons-material/Check';
 import db from '../../lib/firebase/firebase'
 import {
   Timestamp,
@@ -14,33 +13,32 @@ import {
   where,
   serverTimestamp,
   addDoc,
-  orderBy,
-  FieldValue
+  orderBy
 } from "firebase/firestore";
 
 type Task = {
   id: string,
   title: string,
-  completed: boolean,
-  timestamp: FieldValue
+  status: string,
+  timestamp: string
 };
 
 const Todo = () => {
+  const [ inputValue, setInputValue ] = useState<string>('');
   const [ tasks, setTasks ] = useState<Task[]>([]);
 
   // 全タスクの取得
-  const fetchTodos = async () => {
-    const col = collection(db, "tasks");
-    const q = query(col, orderBy('timestamp', 'desc'))
-    const snapshot = await getDocs(q);
-    const taskList: Task[] = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data()
-    } as Task));
-    setTasks(taskList);
-  };
-
   useEffect(() => {
+    const fetchTodos = async () => {
+      const col = collection(db, "tasks");
+      const q = query(col, orderBy('timestamp', 'desc'))
+      const snapshot = await getDocs(q);
+      const taskList: Task[] = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data()
+      } as Task));
+      setTasks(taskList);
+    };
     fetchTodos();
   }, []);
 
@@ -52,12 +50,11 @@ const Todo = () => {
       try {
         const docData = {
           title: title.current.value,
-          completed: false,
+          status: '未着手',
           timestamp: serverTimestamp()
         };
         await addDoc(collection(db, 'tasks'), docData);
-        title.current.value = '';
-        fetchTodos();
+        window.location.reload();
       } catch(error) {
         console.error(error)
       }
@@ -67,47 +64,29 @@ const Todo = () => {
   };
 
   // タスク編集
-  const handleChange = (id: string, editedValue: string) => {
-    const newTasks = tasks.map((task) => {
-      if (task.id === id) {
-        task.title = editedValue;
-        task.timestamp = serverTimestamp();
+  const handleEdit = async (id: string, editedValue: string) => {
+    try {
+      const updatedDocData = {
+        title: editedValue,
+        timestamp: serverTimestamp()
       };
-      return task;
-    });
-    setTasks(newTasks);
-  };
-
-  const handleEdit = async (id: string) => {
-    try {
-      const updatedDocData = tasks.filter((task) => task.id === id)[0];
       await updateDoc(doc(db, "tasks", id), updatedDocData);
-    } catch(error) {
-      console.log(error);
-    };
-  }
 
-  // タスク削除
-  const handleDelete = async (id: string) => {
-    await deleteDoc(doc(db, "tasks", id));
-    fetchTodos();
-  }
-
-  // タスク完了、未着手トグル
-  const handleComplete = async (id: string) => {
-    try {
       const newTasks = tasks.map((task) => {
-        if (task.id === id) {
-          task.completed = !task.completed
+        if ( task.id === id ) {
+          task.title = editedValue;
         };
         return task;
       });
       setTasks(newTasks);
-      const updatedDocData = tasks.filter((task) => task.id === id)[0];
-      await updateDoc(doc(db, "tasks", id), updatedDocData);
     } catch(error) {
       console.log(error);
-    }
+    };
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteDoc(doc(db, "tasks", id));
+    window.location.reload();
   }
 
   return (
@@ -119,16 +98,13 @@ const Todo = () => {
         <div className='mt-5 border'>
           <ul className='px-5'>
             {tasks.map((task) => (
-              <li key={task.id} className='flex justify-between gap-5 py-5 px-5 [&:not(:last-child)]:border-b'>
+              <li key={task.id} className='flex justify-between gap-3 py-5 px-5 [&:not(:last-child)]:border-b'>
                 <input
                   className='focus:outline-none bg-white w-full'
                   type='text'
                   value={task.title}
-                  onChange={(e) => handleChange(task.id, e.target.value)}
-                  disabled={task.completed}
+                  onChange={(e) => handleEdit(task.id, e.target.value)}
                 />
-                <CheckIcon className={`${task.completed && 'text-green-500'}`} onClick={() => handleComplete(task.id)}/>
-                {task.completed || <EditIcon className='cursor-pointer' onClick={(e) => handleEdit(task.id)} />}
                 <DeleteIcon className='cursor-pointer' onClick={() => handleDelete(task.id)}/>
               </li>
             ))}
